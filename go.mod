@@ -1,4 +1,4 @@
-module github.com/cgrates/fsock
+module github.com/alexkinch/fsock
 
 go 1.16
 
