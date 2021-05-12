@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -35,7 +36,7 @@ func init() {
 func NewFSock(fsaddr, fspaswd string, reconnects int,
 	eventHandlers map[string][]func(string, int),
 	eventFilters map[string][]string,
-	l logger, connIdx int, bgapiSup bool) (fsock *FSock, err error) {
+	l zerolog.Logger, connIdx int, bgapiSup bool) (fsock *FSock, err error) {
 	if l == nil {
 		l = nopLogger{}
 	}
@@ -75,7 +76,7 @@ type FSock struct {
 	delayFunc       func() int
 	stopReadEvents  chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
 	errReadEvents   chan error
-	logger          logger
+	logger          zerolog.Logger
 	bgapiSup        bool
 }
 
@@ -490,7 +491,7 @@ func (fs *FSock) doBackgroundJob(event string) { // add mutex protection
 // Instantiates a new FSockPool
 func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWaitConn time.Duration,
 	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
-	l logger, connIdx int, bgapiSup bool) *FSockPool {
+	l zerolog.Logger, connIdx int, bgapiSup bool) *FSockPool {
 	if l == nil {
 		l = nopLogger{}
 	}
@@ -521,7 +522,7 @@ type FSockPool struct {
 	reconnects    int
 	eventHandlers map[string][]func(string, int)
 	eventFilters  map[string][]string
-	logger        logger
+	logger        zerolog.Logger
 	allowedConns  chan struct{} // Will be populated with members allowed
 	fSocks        chan *FSock   // Keep here reference towards the list of opened sockets
 	maxWaitConn   time.Duration // Maximum duration to wait for a connection to be returned by Pop
