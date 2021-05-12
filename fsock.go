@@ -13,13 +13,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
 	"io"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"github.com/rs/zerolog"
 )
 
 var (
@@ -37,9 +37,7 @@ func NewFSock(fsaddr, fspaswd string, reconnects int,
 	eventHandlers map[string][]func(string, int),
 	eventFilters map[string][]string,
 	l zerolog.Logger, connIdx int, bgapiSup bool) (fsock *FSock, err error) {
-	if l == nil {
-		l = nopLogger{}
-	}
+
 	fsock = &FSock{
 		fsMutex:         new(sync.RWMutex),
 		connIdx:         connIdx,
@@ -98,13 +96,13 @@ func (fs *FSock) connect() (err error) {
 
 	var conn net.Conn
 	if conn, err = net.Dial("tcp", fs.fsaddress); err != nil {
-		fs.logger.Err(fmt.Sprintf("<FSock> Attempt to connect to FreeSWITCH, received: %s", err.Error()))
+		fs.logger.Error().Err(err).Msg("<FSock> Attempt to connect to FreeSWITCH")
 		return
 	}
 	fs.fsMutex.Lock()
 	fs.conn = conn
 	fs.fsMutex.Unlock()
-	fs.logger.Info("<FSock> Successfully connected to FreeSWITCH!")
+	fs.logger.Error().Msg("<FSock> Successfully connected to FreeSWITCH!")
 	// Connected, init buffer, auth and subscribe to desired events and filters
 	fs.fsMutex.RLock()
 	fs.buffer = bufio.NewReaderSize(fs.conn, 8192) // reinit buffer
@@ -145,7 +143,7 @@ func (fs *FSock) Connected() (ok bool) {
 func (fs *FSock) Disconnect() (err error) {
 	fs.fsMutex.Lock()
 	if fs.conn != nil {
-		fs.logger.Info("<FSock> Disconnecting from FreeSWITCH!")
+		fs.logger.Info().Msg("<FSock> Disconnecting from FreeSWITCH!")
 		err = fs.conn.Close()
 		fs.conn = nil
 	}
@@ -175,7 +173,7 @@ func (fs *FSock) send(cmd string) (err error) {
 	fs.fsMutex.RLock()
 	defer fs.fsMutex.RUnlock()
 	if _, err = fs.conn.Write([]byte(cmd)); err != nil {
-		fs.logger.Err(fmt.Sprintf("<FSock> Cannot write command to socket <%s>", err.Error()))
+		fs.logger.Error().Err(err).Msg("<FSock> Cannot write command to socket")
 	}
 	return
 }
@@ -299,7 +297,7 @@ func (fs *FSock) readHeaders() (header string, err error) {
 	for {
 		readLine, err = fs.buffer.ReadBytes('\n')
 		if err != nil {
-			fs.logger.Err(fmt.Sprintf("<FSock> Error reading headers: <%s>", err.Error()))
+			fs.logger.Error().Err(err).Msg("<FSock> Error reading headers")
 			fs.Disconnect()
 			return
 		}
@@ -319,7 +317,7 @@ func (fs *FSock) readBody(noBytes int) (body string, err error) {
 
 	for i := 0; i < noBytes; i++ {
 		if readByte, err = fs.buffer.ReadByte(); err != nil {
-			fs.logger.Err(fmt.Sprintf("<FSock> Error reading message body: <%s>", err.Error()))
+			fs.logger.Error().Err(err).Msg("<FSock> Error reading message body: <%s>")
 			fs.Disconnect()
 			return
 		}
@@ -460,7 +458,7 @@ func (fs *FSock) dispatchEvent(event string) {
 			return
 		}
 	}
-	fs.logger.Warning(fmt.Sprintf("<FSock> No dispatcher for event: <%+v> with event name: %s", event, eventName))
+	fs.logger.Warn().Msgf("<FSock> No dispatcher for event: <%+v> with event name: %s", event, eventName)
 }
 
 // bgapi event lisen fuction
@@ -468,7 +466,7 @@ func (fs *FSock) doBackgroundJob(event string) { // add mutex protection
 	evMap := EventToMap(event)
 	jobUUID, has := evMap["Job-UUID"]
 	if !has {
-		fs.logger.Err("<FSock> BACKGROUND_JOB with no Job-UUID")
+		fs.logger.Error().Msg("<FSock> BACKGROUND_JOB with no Job-UUID")
 		return
 	}
 
@@ -477,7 +475,7 @@ func (fs *FSock) doBackgroundJob(event string) { // add mutex protection
 	out, has = fs.backgroundChans[jobUUID]
 	fs.fsMutex.RUnlock()
 	if !has {
-		fs.logger.Err(fmt.Sprintf("<FSock> BACKGROUND_JOB with UUID %s lost!", jobUUID))
+		fs.logger.Error().Msgf("<FSock> BACKGROUND_JOB with UUID %s lost!", jobUUID)
 		return // not a requested bgapi
 	}
 
@@ -492,9 +490,6 @@ func (fs *FSock) doBackgroundJob(event string) { // add mutex protection
 func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWaitConn time.Duration,
 	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
 	l zerolog.Logger, connIdx int, bgapiSup bool) *FSockPool {
-	if l == nil {
-		l = nopLogger{}
-	}
 	pool := &FSockPool{
 		connIdx:       connIdx,
 		fsAddr:        fsaddr,
